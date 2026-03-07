@@ -12,10 +12,17 @@ vim.api.nvim_create_user_command("SilverLining", function(opts)
 		return
 	end
 
-	require("telescope").extensions["silver-lining"]["silver-lining"]({ pr_number = pr_number })
+	local has_telescope = pcall(require, "telescope")
+	if has_telescope then
+		require("telescope").extensions["silver-lining"]["silver-lining"]({ pr_number = pr_number })
+	else
+		require("silver-lining").load_review(pr_number, function()
+			vim.cmd("copen")
+		end)
+	end
 end, {
 	nargs = "?",
-	desc = "Load GitHub PR review comments into Telescope",
+	desc = "Load GitHub PR review comments",
 })
 
 vim.api.nvim_create_user_command("SilverLiningClear", function()
