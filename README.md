@@ -2,7 +2,7 @@
 
 Every cloud has a silver lining — and every code review has one too.
 
-**silver-lining.nvim** brings GitHub PR review comments straight into your editor. Because code review shouldn't feel heavy — it can be light, almost like it's floating down from the cloud. Get it? *Cloud*. *Silver lining*. Yes, it's a pun. No, we're not sorry.
+**silver-lining.nvim** brings GitHub PR review comments straight into your nvim. Because code review shouldn't feel heavy — it can be light, almost like it's floating down from the cloud. Get it? *Cloud*. *Silver lining*. Yes, it's a pun. No, we're not sorry.
 
 ## Features
 
