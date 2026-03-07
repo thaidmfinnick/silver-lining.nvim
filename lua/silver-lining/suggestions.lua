@@ -362,12 +362,24 @@ function M.open_diff(bufnr, item)
 	vim.cmd("tabnew")
 	local tab = vim.api.nvim_get_current_tabpage()
 
+	local short_name = vim.fn.fnamemodify(filename, ":t")
+	local orig_name = "silver-lining://original/" .. short_name
+	local suggested_name = "silver-lining://suggested/" .. short_name
+
+	-- Wipe any leftover buffers with these names from a previous diff
+	for _, name in ipairs({ orig_name, suggested_name }) do
+		local existing = vim.fn.bufnr(name)
+		if existing ~= -1 then
+			vim.api.nvim_buf_delete(existing, { force = true })
+		end
+	end
+
 	local orig_buf = vim.api.nvim_create_buf(false, true)
 	vim.api.nvim_buf_set_lines(orig_buf, 0, -1, false, all_lines)
 	vim.bo[orig_buf].filetype = filetype
 	vim.bo[orig_buf].buftype = "nofile"
 	vim.bo[orig_buf].modifiable = false
-	vim.api.nvim_buf_set_name(orig_buf, "silver-lining://original/" .. vim.fn.fnamemodify(filename, ":t"))
+	vim.api.nvim_buf_set_name(orig_buf, orig_name)
 	vim.api.nvim_set_current_buf(orig_buf)
 	vim.cmd("diffthis")
 
@@ -378,7 +390,7 @@ function M.open_diff(bufnr, item)
 	vim.bo[suggested_buf].filetype = filetype
 	vim.bo[suggested_buf].buftype = "nofile"
 	vim.bo[suggested_buf].modifiable = false
-	vim.api.nvim_buf_set_name(suggested_buf, "silver-lining://suggested/" .. vim.fn.fnamemodify(filename, ":t"))
+	vim.api.nvim_buf_set_name(suggested_buf, suggested_name)
 	vim.api.nvim_set_current_buf(suggested_buf)
 	vim.cmd("diffthis")
 
