@@ -92,6 +92,13 @@ function M.load_review(pr_number, on_done)
 	local stop_spinner = start_spinner()
 
 	local function fetch_comments(repo, pr_num)
+		-- Validate repo format to prevent command injection
+		if not repo:match("^[%w%.%-_]+/[%w%.%-_]+$") then
+			stop_spinner()
+			vim.notify("[silver-lining] Invalid repo format: " .. repo, vim.log.levels.ERROR)
+			return
+		end
+
 		local cmd = string.format("gh api repos/%s/pulls/%d/comments --paginate", repo, pr_num)
 
 		async_cmd(cmd, function(output, err)

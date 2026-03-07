@@ -2,17 +2,16 @@
 
 Every cloud has a silver lining — and every code review has one too.
 
-**silver-lining.nvim** brings GitHub PR review comments straight into your nvim. Because code review shouldn't feel heavy — it can be light, almost like it's floating down from the cloud. Get it? *Cloud*. *Silver lining*. Yes, it's a pun. No, we're not sorry.
+**silver-lining.nvim** brings GitHub PR review comments straight into your nvim. Cloud or Claude...
 
 ## Features
 
-- Fetch PR review comments from GitHub using `gh` CLI
+- Auto-detects repo and PR number from your current branch and fetch PR review comments from GitHub using `gh` CLI
 - Browse comments in a Telescope picker with severity, file path, and preview
 - Inline virtual text showing reviewer comments and code suggestions
 - Accept or dismiss suggestions with a single keypress
 - Side-by-side diff view for suggested changes
 - Native diagnostics integration
-- Auto-detects repo and PR number from your current branch
 
 ## Requirements
 
@@ -26,7 +25,7 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
-  "your-username/silver-lining.nvim",
+  "thadmfinnick/silver-lining.nvim",
   dependencies = {
     "nvim-telescope/telescope.nvim", -- optional, for picker UI
   },
@@ -42,7 +41,7 @@ Using [packer.nvim](https://github.com/wbthomason/packer.nvim):
 
 ```lua
 use {
-  "your-username/silver-lining.nvim",
+  "thadmfinnick/silver-lining.nvim",
   requires = { "nvim-telescope/telescope.nvim" }, -- optional
   config = function()
     require("silver-lining").setup()
@@ -101,7 +100,3 @@ In the diff view:
 2. Comments are parsed, categorized by severity, and presented in a Telescope picker
 3. Select a comment to jump to the file — inline virtual text and diagnostics appear on the relevant lines
 4. Review the suggestion, then accept it to apply the change or dismiss it to move on
-
-## License
-
-MIT
