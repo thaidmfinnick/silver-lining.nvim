@@ -1,11 +1,28 @@
 local M = {}
 
+---@class silver-lining.Keymaps
+---@field accept? string Accept suggestion under cursor (default: "<leader>sa")
+---@field dismiss? string Dismiss comment under cursor (default: "<leader>sx")
+---@field diff? string Open side-by-side diff view (default: "<leader>sd")
+---@field accept_all? string Accept all suggestions in buffer (default: "<leader>sA")
+---@field dismiss_all? string Dismiss all comments in buffer (default: "<leader>sX")
+---@field next_comment? string Jump to next review comment (default: "]r")
+---@field prev_comment? string Jump to previous review comment (default: "[r")
+
 ---@class silver-lining.Config
 ---@field repo? string GitHub repo in "owner/repo" format (auto-detects if omitted)
----@field auto_open? boolean auto-open quickfix list after loading (default: true)
+---@field keymaps? silver-lining.Keymaps|false Buffer-local keymaps (set to false to disable all)
 local defaults = {
 	repo = nil,
-	auto_open = true,
+	keymaps = {
+		accept = "<leader>sa",
+		dismiss = "<leader>sx",
+		diff = "<leader>sd",
+		accept_all = "<leader>sA",
+		dismiss_all = "<leader>sX",
+		next_comment = "]r",
+		prev_comment = "[r",
+	},
 }
 
 ---@type silver-lining.Config

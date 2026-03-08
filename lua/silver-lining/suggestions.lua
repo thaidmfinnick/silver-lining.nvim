@@ -188,13 +188,12 @@ function M.clear(bufnr)
 		vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
 		vim.api.nvim_buf_clear_namespace(bufnr, sign_ns, 0, -1)
 		-- Remove buffer-local keymaps
-		pcall(vim.keymap.del, "n", "<leader>sa", { buffer = bufnr })
-		pcall(vim.keymap.del, "n", "<leader>sx", { buffer = bufnr })
-		pcall(vim.keymap.del, "n", "<leader>sd", { buffer = bufnr })
-		pcall(vim.keymap.del, "n", "<leader>sA", { buffer = bufnr })
-		pcall(vim.keymap.del, "n", "<leader>sX", { buffer = bufnr })
-		pcall(vim.keymap.del, "n", "]r", { buffer = bufnr })
-		pcall(vim.keymap.del, "n", "[r", { buffer = bufnr })
+		local keymaps = require("silver-lining.config").get().keymaps
+		if keymaps then
+			for _, lhs in pairs(keymaps) do
+				pcall(vim.keymap.del, "n", lhs, { buffer = bufnr })
+			end
+		end
 	else
 		for _, b in ipairs(vim.api.nvim_list_bufs()) do
 			if vim.api.nvim_buf_is_valid(b) then
@@ -304,17 +303,6 @@ function M.dismiss(bufnr, item)
 	)
 end
 
---- Resolve (mark as done): dismiss + clear everything for item under cursor
----@param bufnr number
----@param item silver-lining.ReviewComment
-function M.resolve(bufnr, item)
-	clear_item(bufnr, item)
-	vim.notify(
-		string.format("[silver-lining] Resolved review at line %d", item.line),
-		vim.log.levels.INFO
-	)
-end
-
 --- Open a diff split showing original vs suggested code
 --- Left = original, Right = with suggestion applied
 ---@param bufnr number
@@ -354,13 +342,9 @@ function M.open_diff(bufnr, item)
 		vim.list_extend(suggested_lines, after)
 	end
 
-	-- Store original window to return to
-	local orig_win = vim.api.nvim_get_current_win()
-
 	-- Create the diff layout
 	-- Left: scratch buffer with original content
 	vim.cmd("tabnew")
-	local tab = vim.api.nvim_get_current_tabpage()
 
 	local short_name = vim.fn.fnamemodify(filename, ":t")
 	local orig_name = "silver-lining://original/" .. short_name
@@ -429,10 +413,24 @@ function M.open_diff(bufnr, item)
 	end
 
 	-- Set keymaps on both buffers in the diff tab
+	local keymaps = require("silver-lining.config").get().keymaps
 	for _, buf in ipairs({ orig_buf, suggested_buf }) do
 		vim.keymap.set("n", "q", close_diff, { buffer = buf, desc = "Close diff view" })
-		vim.keymap.set("n", "<leader>sa", accept_and_close, { buffer = buf, desc = "Accept suggestion and close" })
 		vim.keymap.set("n", "<Esc>", close_diff, { buffer = buf, desc = "Close diff view" })
+		if keymaps and keymaps.accept then
+			vim.keymap.set("n", keymaps.accept, accept_and_close, { buffer = buf, desc = "Accept suggestion and close" })
+		end
+	end
+end
+
+--- Set a buffer-local keymap if the key is configured (non-nil, non-false)
+---@param lhs? string|false
+---@param rhs fun()
+---@param bufnr number
+---@param desc string
+local function map_if(lhs, rhs, bufnr, desc)
+	if lhs then
+		vim.keymap.set("n", lhs, rhs, { buffer = bufnr, desc = "Silver Lining: " .. desc })
 	end
 end
 
@@ -440,36 +438,36 @@ end
 ---@param bufnr number
 ---@param buf_items silver-lining.ReviewComment[]
 function M._setup_keymaps(bufnr, buf_items)
-	-- Accept suggestion under cursor
-	vim.keymap.set("n", "<leader>sa", function()
+	local keymaps = require("silver-lining.config").get().keymaps
+	if not keymaps then
+		return
+	end
+
+	map_if(keymaps.accept, function()
 		local cursor = vim.api.nvim_win_get_cursor(0)[1]
 		local item = find_item_at_cursor(bufnr, cursor, buf_items)
 		if item then
 			M.accept(bufnr, item)
 		end
-	end, { buffer = bufnr, desc = "Silver Lining: Accept suggestion" })
+	end, bufnr, "Accept suggestion")
 
-	-- Open inline diff view for comment under cursor
-	vim.keymap.set("n", "<leader>sd", function()
+	map_if(keymaps.diff, function()
 		local cursor = vim.api.nvim_win_get_cursor(0)[1]
 		local item = find_item_at_cursor(bufnr, cursor, buf_items)
 		if item then
 			M.open_diff(bufnr, item)
 		end
-	end, { buffer = bufnr, desc = "Silver Lining: Open diff view" })
+	end, bufnr, "Open diff view")
 
-	-- Dismiss comment under cursor
-	vim.keymap.set("n", "<leader>sx", function()
+	map_if(keymaps.dismiss, function()
 		local cursor = vim.api.nvim_win_get_cursor(0)[1]
 		local item = find_item_at_cursor(bufnr, cursor, buf_items)
 		if item then
 			M.dismiss(bufnr, item)
 		end
-	end, { buffer = bufnr, desc = "Silver Lining: Dismiss comment" })
+	end, bufnr, "Dismiss comment")
 
-	-- Accept all suggestions in buffer
-	vim.keymap.set("n", "<leader>sA", function()
-		-- Apply in reverse order to preserve line numbers
+	map_if(keymaps.accept_all, function()
 		local with_suggestions = vim.tbl_filter(function(item)
 			return item.suggestion ~= nil
 		end, buf_items)
@@ -484,16 +482,14 @@ function M._setup_keymaps(bufnr, buf_items)
 			count = count + 1
 		end
 		vim.notify(string.format("[silver-lining] Applied %d suggestions", count), vim.log.levels.INFO)
-	end, { buffer = bufnr, desc = "Silver Lining: Accept all suggestions" })
+	end, bufnr, "Accept all suggestions")
 
-	-- Dismiss all
-	vim.keymap.set("n", "<leader>sX", function()
+	map_if(keymaps.dismiss_all, function()
 		M.clear(bufnr)
 		vim.notify("[silver-lining] Dismissed all comments", vim.log.levels.INFO)
-	end, { buffer = bufnr, desc = "Silver Lining: Dismiss all comments" })
+	end, bufnr, "Dismiss all comments")
 
-	-- Navigate: next review comment
-	vim.keymap.set("n", "]r", function()
+	map_if(keymaps.next_comment, function()
 		local cursor = vim.api.nvim_win_get_cursor(0)[1]
 		for _, item in ipairs(buf_items) do
 			if item.line > cursor then
@@ -501,14 +497,12 @@ function M._setup_keymaps(bufnr, buf_items)
 				return
 			end
 		end
-		-- Wrap around
 		if #buf_items > 0 then
 			vim.api.nvim_win_set_cursor(0, { buf_items[1].line, 0 })
 		end
-	end, { buffer = bufnr, desc = "Silver Lining: Next review comment" })
+	end, bufnr, "Next review comment")
 
-	-- Navigate: previous review comment
-	vim.keymap.set("n", "[r", function()
+	map_if(keymaps.prev_comment, function()
 		local cursor = vim.api.nvim_win_get_cursor(0)[1]
 		for i = #buf_items, 1, -1 do
 			if buf_items[i].line < cursor then
@@ -516,11 +510,10 @@ function M._setup_keymaps(bufnr, buf_items)
 				return
 			end
 		end
-		-- Wrap around
 		if #buf_items > 0 then
 			vim.api.nvim_win_set_cursor(0, { buf_items[#buf_items].line, 0 })
 		end
-	end, { buffer = bufnr, desc = "Silver Lining: Previous review comment" })
+	end, bufnr, "Previous review comment")
 end
 
 return M

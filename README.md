@@ -58,10 +58,20 @@ Without Telescope, you can use `require("silver-lining").load_review()` directly
 require("silver-lining").setup({
   -- GitHub repo in "owner/repo" format (auto-detects if omitted)
   repo = nil,
-  -- Auto-open quickfix list after loading (default: true)
-  auto_open = true,
+  -- Buffer-local keymaps (set to false to disable all)
+  keymaps = {
+    accept = "<leader>sa",
+    dismiss = "<leader>sx",
+    diff = "<leader>sd",
+    accept_all = "<leader>sA",
+    dismiss_all = "<leader>sX",
+    next_comment = "]r",
+    prev_comment = "[r",
+  },
 })
 ```
+
+Set individual keys to `false` to disable them, or set `keymaps = false` to disable all keymaps and define your own.
 
 ## Usage
 
@@ -75,7 +85,7 @@ require("silver-lining").setup({
 
 ### Keymaps
 
-Once review comments are loaded and you select a file from the Telescope picker, the following buffer-local keymaps are available:
+Once review comments are loaded and you select a file from the Telescope picker, the following buffer-local keymaps are available (all configurable):
 
 | Key | Description |
 |---|---|
