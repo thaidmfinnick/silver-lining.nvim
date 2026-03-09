@@ -110,3 +110,28 @@ In the diff view:
 2. Comments are parsed, categorized by severity, and presented in a Telescope picker
 3. Select a comment to jump to the file — inline virtual text and diagnostics appear on the relevant lines
 4. Review the suggestion, then accept it to apply the change or dismiss it to move on
+
+## FAQ
+
+**Q: Do I need Telescope installed?**
+A: No. Telescope is optional. Without it, comments are loaded into the quickfix list instead.
+
+**Q: How does the plugin detect which PR to use?**
+A: It uses the `gh` CLI to find the PR associated with your current branch. You can also pass a PR number explicitly with `:SilverLining 42`.
+
+**Q: What happens when I accept a suggestion?**
+A: The suggested code change is applied directly to the buffer, replacing the original lines. The virtual text and diagnostics for that comment are then cleared.
+
+**Q: Can I use this with GitHub Enterprise?**
+A: Yes, as long as your `gh` CLI is authenticated against your GitHub Enterprise instance.
+
+## Contributing
+
+Contributions are welcome! If you'd like to help improve silver-lining.nvim:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Make your changes
+4. Submit a pull request
+
+Please open an issue first if you want to discuss a larger change.
