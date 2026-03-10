@@ -99,7 +99,38 @@ function M.load_review(pr_number, on_done)
 			return
 		end
 
-		local cmd = string.format("gh api repos/%s/pulls/%d/comments --paginate", repo, pr_num)
+		local owner, name = repo:match("^([^/]+)/(.+)$")
+		-- stylua: ignore
+		local query = table.concat({
+			"query($owner: String!, $name: String!, $pr: Int!, $cursor: String) {",
+			"  repository(owner: $owner, name: $name) {",
+			"    pullRequest(number: $pr) {",
+			"      reviewThreads(first: 100, after: $cursor) {",
+			"        pageInfo { hasNextPage endCursor }",
+			"        nodes {",
+			"          isResolved",
+			"          comments(first: 100) {",
+			"            nodes {",
+			"              databaseId path body line startLine",
+			"              originalLine originalStartLine diffHunk",
+			"              commit { oid } originalCommit { oid }",
+			"              author { login } createdAt",
+			"            }",
+			"          }",
+			"        }",
+			"      }",
+			"    }",
+			"  }",
+			"}",
+		}, "\n")
+
+		local cmd = string.format(
+			"gh api graphql --paginate -F owner=%s -F name=%s -F pr=%d -f query=%s",
+			vim.fn.shellescape(owner),
+			vim.fn.shellescape(name),
+			pr_num,
+			vim.fn.shellescape(query)
+		)
 
 		async_cmd(cmd, function(output, err)
 			stop_spinner()
@@ -120,12 +151,47 @@ function M.load_review(pr_number, on_done)
 				return
 			end
 
-			if json.message then
-				vim.notify("[silver-lining] GitHub API: " .. json.message, vim.log.levels.ERROR)
+			if json.errors then
+				local msg = json.errors[1] and json.errors[1].message or "Unknown GraphQL error"
+				vim.notify("[silver-lining] GitHub API: " .. msg, vim.log.levels.ERROR)
 				return
 			end
 
-			local items = parser.parse_review_comments(json)
+			-- Extract unresolved thread comments and transform to REST-compatible format
+			local threads = json.data
+				and json.data.repository
+				and json.data.repository.pullRequest
+				and json.data.repository.pullRequest.reviewThreads
+				and json.data.repository.pullRequest.reviewThreads.nodes
+			if not threads then
+				vim.notify("[silver-lining] Unexpected API response structure", vim.log.levels.ERROR)
+				return
+			end
+
+			local comments = {}
+			for _, thread in ipairs(threads) do
+				if not thread.isResolved then
+					for _, c in ipairs(thread.comments.nodes) do
+						table.insert(comments, {
+							id = c.databaseId,
+							path = c.path,
+							body = c.body,
+							line = c.line,
+							start_line = c.startLine,
+							original_line = c.originalLine,
+							original_start_line = c.originalStartLine,
+							diff_hunk = c.diffHunk,
+							commit_id = c.commit and c.commit.oid,
+							original_commit_id = c.originalCommit and c.originalCommit.oid,
+							user = { login = c.author and c.author.login },
+							created_at = c.createdAt,
+							side = "RIGHT",
+						})
+					end
+				end
+			end
+
+			local items = parser.parse_review_comments(comments)
 			M._items = items
 
 			if #items == 0 then
