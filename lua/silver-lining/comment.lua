@@ -483,7 +483,7 @@ function M.submit(event)
 		return
 	end
 
-	if #M._drafts == 0 then
+	if #M._drafts == 0 and event ~= "APPROVE" then
 		vim.notify("[silver-lining] No drafts to submit", vim.log.levels.WARN)
 		return
 	end
@@ -517,8 +517,10 @@ function M.submit(event)
 		local payload = {
 			commit_id = head_sha,
 			event = event,
-			comments = comments,
 		}
+		if #comments > 0 then
+			payload.comments = comments
+		end
 
 		local json_body = vim.json.encode(payload)
 		local cmd = string.format(
