@@ -41,7 +41,7 @@ end
 --- Run a shell command async and return output via callback
 ---@param cmd string
 ---@param callback fun(output: string?, err: string?)
-local function async_cmd(cmd, callback)
+function M.async_cmd(cmd, callback)
 	local stdout_data = {}
 	local stderr_data = {}
 
@@ -70,16 +70,16 @@ end
 
 --- Detect repo async, then call callback with result
 ---@param callback fun(repo: string?)
-local function detect_repo_async(callback)
-	async_cmd("gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null", function(out)
+function M.detect_repo_async(callback)
+	M.async_cmd("gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null", function(out)
 		callback(out)
 	end)
 end
 
 --- Detect PR number async, then call callback with result
 ---@param callback fun(pr_number: number?)
-local function detect_pr_number_async(callback)
-	async_cmd("gh pr view --json number -q .number 2>/dev/null", function(out)
+function M.detect_pr_number_async(callback)
+	M.async_cmd("gh pr view --json number -q .number 2>/dev/null", function(out)
 		callback(out and tonumber(out) or nil)
 	end)
 end
@@ -132,7 +132,7 @@ function M.load_review(pr_number, on_done)
 			vim.fn.shellescape(query)
 		)
 
-		async_cmd(cmd, function(output, err)
+		M.async_cmd(cmd, function(output, err)
 			stop_spinner()
 
 			if not output then
@@ -227,7 +227,7 @@ function M.load_review(pr_number, on_done)
 		if pr_number then
 			fetch_comments(repo, pr_number)
 		else
-			detect_pr_number_async(function(pr_num)
+			M.detect_pr_number_async(function(pr_num)
 				if not pr_num then
 					stop_spinner()
 					vim.notify("[silver-lining] Could not detect PR number. Pass it as argument.", vim.log.levels.ERROR)
@@ -241,7 +241,7 @@ function M.load_review(pr_number, on_done)
 	if cfg.repo then
 		with_repo(cfg.repo)
 	else
-		detect_repo_async(with_repo)
+		M.detect_repo_async(with_repo)
 	end
 end
 

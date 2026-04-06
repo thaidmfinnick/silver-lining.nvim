@@ -22,6 +22,8 @@ local defaults = {
 		dismiss_all = "<leader>sX",
 		next_comment = "]r",
 		prev_comment = "[r",
+		comment = "<leader>sc",
+		suggestion = "<leader>ss",
 	},
 }
 

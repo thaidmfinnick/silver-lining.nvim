@@ -33,3 +33,34 @@ vim.api.nvim_create_user_command("SilverLiningClear", function()
 end, {
 	desc = "Clear all Silver Lining suggestions and diagnostics",
 })
+
+vim.api.nvim_create_user_command("SilverLiningComment", function()
+	require("silver-lining.comment").open("comment")
+end, {
+	range = true,
+	desc = "Create a comment draft on selected lines",
+})
+
+vim.api.nvim_create_user_command("SilverLiningSuggestion", function()
+	require("silver-lining.comment").open("suggestion")
+end, {
+	range = true,
+	desc = "Create a suggestion draft on selected lines",
+})
+
+vim.api.nvim_create_user_command("SilverLiningDrafts", function()
+	require("silver-lining.comment").open_picker()
+end, {
+	desc = "Preview and manage pending comment drafts",
+})
+
+vim.api.nvim_create_user_command("SilverLiningSubmit", function(opts)
+	local event = opts.fargs[1]
+	require("silver-lining.comment").submit(event)
+end, {
+	nargs = "?",
+	complete = function()
+		return { "COMMENT", "APPROVE", "REQUEST_CHANGES" }
+	end,
+	desc = "Submit all drafts as a GitHub review",
+})
