@@ -39,7 +39,10 @@ function M.render_drafts(bufnr)
 		if vim.fn.fnamemodify(draft.abs_path, ":p") == name and draft.line <= line_count then
 			local kind = draft.mode == "suggestion" and "suggestion" or "comment"
 			local virt_lines = {
-				{ { "  ┌─ ", "SilverLiningDraft" }, { "draft #" .. draft.id .. " (" .. kind .. ", not submitted)", "SilverLiningDraft" } },
+				{
+					{ "  ┌─ ", "SilverLiningDraft" },
+					{ "draft #" .. draft.id .. " (" .. kind .. ", not submitted)", "SilverLiningDraft" },
+				},
 			}
 			for raw in (draft.body .. "\n"):gmatch("(.-)\r?\n") do
 				table.insert(virt_lines, { { "  │ ", "SilverLiningDraft" }, { raw, "SilverLiningDraft" } })
@@ -200,10 +203,7 @@ local function save_draft()
 	local id = float_state.editing_draft_id
 	if id then
 		M.update_draft(id, final_body, float_state.mode)
-		vim.notify(
-			string.format("[silver-lining] Draft updated (%d total)", #M._drafts),
-			vim.log.levels.INFO
-		)
+		vim.notify(string.format("[silver-lining] Draft updated (%d total)", #M._drafts), vim.log.levels.INFO)
 	else
 		id = add_draft({
 			path = float_state.path,
@@ -214,10 +214,7 @@ local function save_draft()
 			mode = float_state.mode,
 			original_code = float_state.original_code,
 		})
-		vim.notify(
-			string.format("[silver-lining] Draft saved (%d total)", #M._drafts),
-			vim.log.levels.INFO
-		)
+		vim.notify(string.format("[silver-lining] Draft saved (%d total)", #M._drafts), vim.log.levels.INFO)
 	end
 
 	close_float()
@@ -246,12 +243,7 @@ local function toggle_mode()
 	end
 
 	-- Update window title
-	local title = float_title(
-		float_state.mode,
-		float_state.path,
-		float_state.start_line,
-		float_state.end_line
-	)
+	local title = float_title(float_state.mode, float_state.path, float_state.start_line, float_state.end_line)
 	vim.api.nvim_win_set_config(float_state.winnr, { title = title })
 end
 
@@ -415,9 +407,7 @@ function M.open_picker()
 				results = M._drafts,
 				entry_maker = function(draft)
 					local icon = draft.mode == "suggestion" and "󰌶 " or "󰍨 "
-					local range = draft.start_line
-							and (draft.start_line .. "-" .. draft.line)
-						or tostring(draft.line)
+					local range = draft.start_line and (draft.start_line .. "-" .. draft.line) or tostring(draft.line)
 					local short_path = vim.fn.fnamemodify(draft.path, ":t")
 					-- Clean body for display
 					local display_body = draft.body:gsub("```suggestion\r?\n.-\r?\n```", "[suggestion]")
@@ -439,8 +429,7 @@ function M.open_picker()
 					local lines = {}
 					table.insert(lines, "Mode: " .. draft.mode)
 					table.insert(lines, "File: " .. draft.path)
-					local range = draft.start_line
-							and ("Lines: " .. draft.start_line .. "-" .. draft.line)
+					local range = draft.start_line and ("Lines: " .. draft.start_line .. "-" .. draft.line)
 						or ("Line: " .. draft.line)
 					table.insert(lines, range)
 					table.insert(lines, string.rep("─", 40))
