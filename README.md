@@ -121,6 +121,7 @@ Select lines in visual mode, then use one of these commands to open a floating e
 | `:SilverLiningSubmit` | Submit all drafts as a review (defaults to `COMMENT`) |
 | `:SilverLiningSubmit APPROVE` | Submit drafts and approve the PR |
 | `:SilverLiningSubmit REQUEST_CHANGES` | Submit drafts and request changes |
+| `:SilverLiningSubmit COMMENT 2 5` | Submit only drafts #2 and #5; the rest stay pending |
 
 Inside the comment/suggestion float:
 
@@ -152,7 +153,7 @@ Inside the drafts picker:
 1. Select lines in visual mode and run `:SilverLiningComment` or `:SilverLiningSuggestion`
 2. A floating editor opens — write your comment or edit the code for a suggestion
 3. Press `<C-t>` to toggle between comment and suggestion mode, `<C-s>` to save the draft
-4. Use `:SilverLiningDrafts` to review, edit, or delete your pending drafts
+4. Drafts show inline in the buffer. Use `:SilverLiningDrafts` to review, edit, or delete them; press `<Tab>` to mark drafts and `<C-s>` to submit just those (or the highlighted one)
 5. When ready, run `:SilverLiningSubmit` to submit all drafts as a single GitHub review
 
 ## FAQ

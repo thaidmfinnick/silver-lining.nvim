@@ -14,6 +14,58 @@ local M = {}
 M._drafts = {}
 local next_id = 1
 
+local draft_ns = vim.api.nvim_create_namespace("silver-lining-drafts")
+
+--- Render this buffer's drafts inline (virtual lines + sign) so pending
+--- comments are visible in the code they target
+---@param bufnr number
+function M.render_drafts(bufnr)
+	if not vim.api.nvim_buf_is_valid(bufnr) then
+		return
+	end
+	vim.api.nvim_buf_clear_namespace(bufnr, draft_ns, 0, -1)
+
+	local name = vim.api.nvim_buf_get_name(bufnr)
+	if name == "" or #M._drafts == 0 then
+		return
+	end
+	name = vim.fn.fnamemodify(name, ":p")
+
+	vim.api.nvim_set_hl(0, "SilverLiningDraft", { link = "DiagnosticVirtualTextWarn", default = true })
+	vim.api.nvim_set_hl(0, "SilverLiningDraftSign", { link = "DiagnosticSignWarn", default = true })
+
+	local line_count = vim.api.nvim_buf_line_count(bufnr)
+	for _, draft in ipairs(M._drafts) do
+		if vim.fn.fnamemodify(draft.abs_path, ":p") == name and draft.line <= line_count then
+			local kind = draft.mode == "suggestion" and "suggestion" or "comment"
+			local virt_lines = {
+				{ { "  ┌─ ", "SilverLiningDraft" }, { "draft #" .. draft.id .. " (" .. kind .. ", not submitted)", "SilverLiningDraft" } },
+			}
+			for raw in (draft.body .. "\n"):gmatch("(.-)\r?\n") do
+				table.insert(virt_lines, { { "  │ ", "SilverLiningDraft" }, { raw, "SilverLiningDraft" } })
+			end
+			table.insert(virt_lines, { { "  └─", "SilverLiningDraft" } })
+
+			vim.api.nvim_buf_set_extmark(bufnr, draft_ns, draft.line - 1, 0, { virt_lines = virt_lines })
+			for lnum = draft.start_line or draft.line, draft.line do
+				vim.api.nvim_buf_set_extmark(bufnr, draft_ns, lnum - 1, 0, {
+					sign_text = "󰏫 ",
+					sign_hl_group = "SilverLiningDraftSign",
+				})
+			end
+		end
+	end
+end
+
+--- Re-render drafts in every loaded buffer
+function M.refresh_drafts()
+	for _, b in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_loaded(b) then
+			M.render_drafts(b)
+		end
+	end
+end
+
 --- Get the file path relative to the git repo root
 ---@param bufnr number
 ---@return string? relative path, or nil if not in a git repo
@@ -34,10 +86,13 @@ end
 
 --- Add a draft to the list
 ---@param draft silver-lining.Draft
+---@return number id
 local function add_draft(draft)
 	draft.id = next_id
 	next_id = next_id + 1
 	table.insert(M._drafts, draft)
+	M.refresh_drafts()
+	return draft.id
 end
 
 --- Remove a draft by id
@@ -46,9 +101,10 @@ function M.remove_draft(id)
 	for i, d in ipairs(M._drafts) do
 		if d.id == id then
 			table.remove(M._drafts, i)
-			return
+			break
 		end
 	end
+	M.refresh_drafts()
 end
 
 --- Update a draft's body and mode
@@ -60,9 +116,10 @@ function M.update_draft(id, body, mode)
 		if d.id == id then
 			d.body = body
 			d.mode = mode
-			return
+			break
 		end
 	end
+	M.refresh_drafts()
 end
 
 --- Get all drafts
@@ -74,6 +131,7 @@ end
 --- Clear all drafts
 function M.clear_drafts()
 	M._drafts = {}
+	M.refresh_drafts()
 end
 
 --- State for the currently open float
@@ -116,6 +174,7 @@ local function float_title(mode, path, start_line, end_line)
 end
 
 --- Save the current float content as a draft
+---@return number? id of the saved draft, nil if nothing was saved
 local function save_draft()
 	if not float_state then
 		return
@@ -138,14 +197,15 @@ local function save_draft()
 		final_body = body
 	end
 
-	if float_state.editing_draft_id then
-		M.update_draft(float_state.editing_draft_id, final_body, float_state.mode)
+	local id = float_state.editing_draft_id
+	if id then
+		M.update_draft(id, final_body, float_state.mode)
 		vim.notify(
 			string.format("[silver-lining] Draft updated (%d total)", #M._drafts),
 			vim.log.levels.INFO
 		)
 	else
-		add_draft({
+		id = add_draft({
 			path = float_state.path,
 			abs_path = float_state.abs_path,
 			line = float_state.end_line,
@@ -161,6 +221,7 @@ local function save_draft()
 	end
 
 	close_float()
+	return id
 end
 
 --- Toggle between comment and suggestion mode in the float
@@ -271,7 +332,7 @@ function M.open(mode, opts)
 	local height = math.min(math.max(#original_code + 3, 8), math.floor(vim.o.lines * 0.5))
 
 	local title = float_title(mode, path, start_line, end_line)
-	local footer = " s: save  t: toggle  <leader>s: submit  q: quit "
+	local footer = " s: save  t: toggle  <leader>s: save+submit this  q: quit "
 
 	local win = vim.api.nvim_open_win(buf, true, {
 		relative = "editor",
@@ -312,9 +373,9 @@ function M.open(mode, opts)
 	vim.keymap.set("n", "s", save_draft, km_opts)
 	vim.keymap.set("n", "t", toggle_mode, km_opts)
 	vim.keymap.set("n", "<leader>s", function()
-		save_draft()
-		if #M._drafts > 0 then
-			M.submit()
+		local id = save_draft()
+		if id then
+			M.submit("COMMENT", { id })
 		end
 	end, km_opts)
 	vim.keymap.set("i", "<C-s>", function()
@@ -349,7 +410,7 @@ function M.open_picker()
 
 	pickers
 		.new({}, {
-			prompt_title = "Silver Lining Drafts (" .. #M._drafts .. ")",
+			prompt_title = "Drafts (" .. #M._drafts .. ")  <Tab> mark  <C-s> submit marked  <C-e> edit  <C-d> delete",
 			finder = finders.new_table({
 				results = M._drafts,
 				entry_maker = function(draft)
@@ -433,6 +494,24 @@ function M.open_picker()
 					end
 				end)
 
+				-- <C-s> submit only the marked drafts (<Tab> to mark), or the highlighted one
+				map({ "i", "n" }, "<C-s>", function()
+					local picker = action_state.get_current_picker(prompt_bufnr)
+					local ids = {}
+					for _, entry in ipairs(picker:get_multi_selection()) do
+						table.insert(ids, entry.value.id)
+					end
+					if #ids == 0 then
+						local entry = action_state.get_selected_entry()
+						if not entry then
+							return
+						end
+						ids = { entry.value.id }
+					end
+					actions.close(prompt_bufnr)
+					M.submit("COMMENT", ids)
+				end)
+
 				-- <C-e> edit draft
 				map({ "i", "n" }, "<C-e>", function()
 					local entry = action_state.get_selected_entry()
@@ -469,11 +548,115 @@ local function detect_head_sha_async(callback)
 	end)
 end
 
---- Submit all drafts as a single GitHub review
+--- Map each RIGHT-side line in a unified diff patch to the index of its hunk.
+--- Only added and context lines can receive RIGHT-side review comments.
+---@param patch string
+---@return table<number, number> line -> hunk index
+local function parse_patch_lines(patch)
+	local lines = {}
+	local hunk = 0
+	local new_line
+	for raw in (patch .. "\n"):gmatch("(.-)\r?\n") do
+		local start = raw:match("^@@ %-%d+,?%d* %+(%d+)")
+		if start then
+			hunk = hunk + 1
+			new_line = tonumber(start)
+		elseif new_line then
+			local prefix = raw:sub(1, 1)
+			if prefix == "+" or prefix == " " or raw == "" then
+				lines[new_line] = hunk
+				new_line = new_line + 1
+			end
+			-- "-" (removed) and "\" (no newline marker) don't advance the new side
+		end
+	end
+	return lines
+end
+
+--- Fetch the PR's changed files and the commentable lines of each
+---@param repo string
+---@param pr_num number
+---@param callback fun(files: table<string, table<number, number>>?, err: string?)
+local function fetch_diff_lines_async(repo, pr_num, callback)
+	local sl = require("silver-lining")
+	local cmd = string.format(
+		"gh api --paginate 'repos/%s/pulls/%d/files?per_page=100' -q '.[] | {filename, patch}'",
+		repo,
+		pr_num
+	)
+	sl.async_cmd(cmd, function(output, err)
+		if not output then
+			callback(nil, err)
+			return
+		end
+		local files = {}
+		for line in output:gmatch("[^\n]+") do
+			local ok, file = pcall(vim.json.decode, line)
+			if ok and type(file) == "table" and file.filename then
+				-- `patch` is absent for binary files and very large diffs
+				files[file.filename] = type(file.patch) == "string" and parse_patch_lines(file.patch) or {}
+			end
+		end
+		callback(files, nil)
+	end)
+end
+
+--- Describe drafts GitHub would reject for not being on a line in the PR diff
+---@param files table<string, table<number, number>>
+---@param drafts silver-lining.Draft[]
+---@return string[] problems one entry per invalid draft
+local function find_invalid_drafts(files, drafts)
+	local problems = {}
+	for _, draft in ipairs(drafts) do
+		local where = draft.path .. ":" .. (draft.start_line and (draft.start_line .. "-") or "") .. draft.line
+		local lines = files[draft.path]
+		if not lines then
+			table.insert(problems, where .. " (file not changed in this PR)")
+		elseif not lines[draft.line] or (draft.start_line and not lines[draft.start_line]) then
+			table.insert(problems, where .. " (line not in the PR diff)")
+		elseif draft.start_line and lines[draft.start_line] ~= lines[draft.line] then
+			table.insert(problems, where .. " (range spans multiple diff hunks)")
+		end
+	end
+	return problems
+end
+
+--- Turn a failed `gh api` call into a readable message, preferring GitHub's error body
+---@param err string? stderr
+---@param body string? stdout (JSON error body)
+---@return string
+local function format_api_error(err, body)
+	local ok, json = pcall(vim.json.decode, body or "")
+	if not ok or type(json) ~= "table" or not json.message then
+		return err or "Unknown error"
+	end
+	local details = {}
+	for _, e in ipairs(type(json.errors) == "table" and json.errors or {}) do
+		table.insert(details, type(e) == "table" and (e.message or vim.json.encode(e)) or tostring(e))
+	end
+	if #details == 0 then
+		return json.message
+	end
+	return json.message .. ": " .. table.concat(details, "; ")
+end
+
+--- Submit drafts as a single GitHub review
 ---@param event? string "COMMENT" (default), "APPROVE", or "REQUEST_CHANGES"
-function M.submit(event)
+---@param ids? number[] draft ids to submit (default: all drafts). Others stay pending.
+function M.submit(event, ids)
 	event = event or "COMMENT"
 	event = event:upper()
+
+	local drafts = M._drafts
+	if ids then
+		drafts = vim.tbl_filter(function(d)
+			return vim.tbl_contains(ids, d.id)
+		end, M._drafts)
+		if #drafts == 0 then
+			vim.notify("[silver-lining] None of the selected drafts exist", vim.log.levels.WARN)
+			return
+		end
+	end
 
 	if not vim.tbl_contains({ "COMMENT", "APPROVE", "REQUEST_CHANGES" }, event) then
 		vim.notify(
@@ -483,7 +666,7 @@ function M.submit(event)
 		return
 	end
 
-	if #M._drafts == 0 and event ~= "APPROVE" then
+	if #drafts == 0 and event ~= "APPROVE" then
 		vim.notify("[silver-lining] No drafts to submit", vim.log.levels.WARN)
 		return
 	end
@@ -492,15 +675,9 @@ function M.submit(event)
 	local cfg = require("silver-lining.config").get()
 
 	local function do_submit(repo, pr_num, head_sha)
-		-- Validate repo format
-		if not repo:match("^[%w%.%-_]+/[%w%.%-_]+$") then
-			vim.notify("[silver-lining] Invalid repo format: " .. repo, vim.log.levels.ERROR)
-			return
-		end
-
 		-- Build comments array for the review
 		local comments = {}
-		for _, draft in ipairs(M._drafts) do
+		for _, draft in ipairs(drafts) do
 			local comment = {
 				path = draft.path,
 				body = draft.body,
@@ -532,16 +709,30 @@ function M.submit(event)
 
 		vim.notify("[silver-lining] Submitting review...", vim.log.levels.INFO)
 
-		sl.async_cmd(cmd, function(output, err)
+		sl.async_cmd(cmd, function(_, err, failed_output)
 			if err then
-				vim.notify("[silver-lining] Failed to submit review: " .. err, vim.log.levels.ERROR)
+				vim.notify(
+					"[silver-lining] Failed to submit review: " .. format_api_error(err, failed_output),
+					vim.log.levels.ERROR
+				)
 				return
 			end
 
-			local count = #M._drafts
-			M.clear_drafts()
+			local count = #drafts
+			if ids then
+				for _, d in ipairs(drafts) do
+					M.remove_draft(d.id)
+				end
+			else
+				M.clear_drafts()
+			end
 			vim.notify(
-				string.format("[silver-lining] Review submitted with %d comment(s) (%s)", count, event),
+				string.format(
+					"[silver-lining] Review submitted with %d comment(s) (%s), %d draft(s) still pending",
+					count,
+					event,
+					#M._drafts
+				),
 				vim.log.levels.INFO
 			)
 		end)
@@ -551,6 +742,12 @@ function M.submit(event)
 	local function with_repo(repo)
 		if not repo then
 			vim.notify("[silver-lining] Could not detect repo. Set repo in config.", vim.log.levels.ERROR)
+			return
+		end
+
+		-- Validate repo format to prevent command injection
+		if not repo:match("^[%w%.%-_]+/[%w%.%-_]+$") then
+			vim.notify("[silver-lining] Invalid repo format: " .. repo, vim.log.levels.ERROR)
 			return
 		end
 
@@ -566,7 +763,32 @@ function M.submit(event)
 					return
 				end
 
-				do_submit(repo, pr_num, sha)
+				if #drafts == 0 then
+					do_submit(repo, pr_num, sha)
+					return
+				end
+
+				-- GitHub rejects the whole review (422) if any comment is off the diff,
+				-- so check drafts up front and name the offending ones
+				fetch_diff_lines_async(repo, pr_num, function(files, err)
+					if not files then
+						vim.notify("[silver-lining] Could not fetch PR diff: " .. (err or ""), vim.log.levels.ERROR)
+						return
+					end
+
+					local problems = find_invalid_drafts(files, drafts)
+					if #problems > 0 then
+						vim.notify(
+							"[silver-lining] Not submitted. These drafts are outside the PR diff "
+								.. "(edit or delete them via :SilverLiningDrafts):\n  "
+								.. table.concat(problems, "\n  "),
+							vim.log.levels.ERROR
+						)
+						return
+					end
+
+					do_submit(repo, pr_num, sha)
+				end)
 			end)
 		end)
 	end

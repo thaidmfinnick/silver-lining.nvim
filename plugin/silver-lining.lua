@@ -56,11 +56,48 @@ end, {
 
 vim.api.nvim_create_user_command("SilverLiningSubmit", function(opts)
 	local event = opts.fargs[1]
-	require("silver-lining.comment").submit(event)
+	local ids
+	if #opts.fargs > 1 then
+		ids = {}
+		for i = 2, #opts.fargs do
+			local id = tonumber(opts.fargs[i])
+			if not id then
+				vim.notify("[silver-lining] Usage: :SilverLiningSubmit [event] [draft_id...]", vim.log.levels.WARN)
+				return
+			end
+			table.insert(ids, id)
+		end
+	end
+	require("silver-lining.comment").submit(event, ids)
 end, {
-	nargs = "?",
-	complete = function()
-		return { "COMMENT", "APPROVE", "REQUEST_CHANGES" }
+	nargs = "*",
+	complete = function(_, cmdline)
+		if #vim.split(cmdline, "%s+") <= 2 then
+			return { "COMMENT", "APPROVE", "REQUEST_CHANGES" }
+		end
+		local ids = {}
+		if package.loaded["silver-lining.comment"] then
+			for _, d in ipairs(require("silver-lining.comment").get_drafts()) do
+				table.insert(ids, tostring(d.id))
+			end
+		end
+		return ids
 	end,
-	desc = "Submit all drafts as a GitHub review",
+	desc = "Submit drafts as a GitHub review (all, or only the given draft ids)",
+})
+
+-- Show review comments and pending drafts inline in any buffer you open
+local group = vim.api.nvim_create_augroup("SilverLining", { clear = true })
+vim.api.nvim_create_autocmd("BufWinEnter", {
+	group = group,
+	callback = function(args)
+		if package.loaded["silver-lining.comment"] then
+			require("silver-lining.comment").render_drafts(args.buf)
+		end
+		local sl = package.loaded["silver-lining"]
+		if sl and sl._items and #sl._items > 0 then
+			require("silver-lining.suggestions").show(args.buf, sl._items)
+			require("silver-lining.diagnostics").set(args.buf, sl._items)
+		end
+	end,
 })

@@ -18,6 +18,15 @@
   - Supports `COMMENT`, `APPROVE`, and `REQUEST_CHANGES` events
 - New default keymaps: `<leader>sc` (comment), `<leader>ss` (suggestion)
 
+### Added
+
+- Submit selected drafts only: `<Tab>` to mark + `<C-s>` in the `:SilverLiningDrafts` picker, `:SilverLiningSubmit [event] [draft_id...]`, and `<leader>s` in the draft float now submits just that draft. Unsubmitted drafts stay pending.
+- Pending drafts render inline in their buffer (virtual lines + sign); review comments now appear in every open buffer after `:SilverLining` and when opening buffers later.
+
+### Fixed
+
+- `:SilverLiningSubmit` failing with a bare `HTTP 422`: drafts are now checked against the PR diff before submitting, and any draft on a file or line outside the diff is listed instead of failing the whole review. API errors now show GitHub's reason instead of only the status code.
+
 ### Changed
 
 - `async_cmd`, `detect_repo_async`, `detect_pr_number_async` are now public module functions on `require("silver-lining")` for reuse across modules

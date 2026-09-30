@@ -38,9 +38,11 @@ local function start_spinner()
 	end
 end
 
---- Run a shell command async and return output via callback
+--- Run a shell command async and return output via callback.
+--- On failure, stdout is passed as the third argument: `gh api` prints the
+--- HTTP error body (with GitHub's actual reason) to stdout, not stderr.
 ---@param cmd string
----@param callback fun(output: string?, err: string?)
+---@param callback fun(output: string?, err: string?, failed_output: string?)
 function M.async_cmd(cmd, callback)
 	local stdout_data = {}
 	local stderr_data = {}
@@ -61,7 +63,7 @@ function M.async_cmd(cmd, callback)
 				if exit_code == 0 and out ~= "" then
 					callback(out, nil)
 				else
-					callback(nil, err ~= "" and err or "Command failed")
+					callback(nil, err ~= "" and err or "Command failed", out)
 				end
 			end)
 		end,
@@ -208,6 +210,14 @@ function M.load_review(pr_number, on_done)
 			})
 
 			vim.notify(string.format("[silver-lining] Loaded %d review comments", #items), vim.log.levels.INFO)
+
+			-- Show comments inline in every buffer that's already open
+			for _, b in ipairs(vim.api.nvim_list_bufs()) do
+				if vim.api.nvim_buf_is_loaded(b) and vim.bo[b].buftype == "" then
+					require("silver-lining.suggestions").show(b, items)
+					require("silver-lining.diagnostics").set(b, items)
+				end
+			end
 
 			if on_done then
 				on_done(items)
