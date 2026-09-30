@@ -698,6 +698,9 @@ function M.submit(event, ids)
 		if #comments > 0 then
 			payload.comments = comments
 		end
+		if event == "APPROVE" and cfg.approve_body then
+			payload.body = cfg.approve_body
+		end
 
 		local json_body = vim.json.encode(payload)
 		local cmd = string.format(

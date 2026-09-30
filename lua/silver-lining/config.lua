@@ -12,8 +12,10 @@ local M = {}
 ---@class silver-lining.Config
 ---@field repo? string GitHub repo in "owner/repo" format (auto-detects if omitted)
 ---@field keymaps? silver-lining.Keymaps|false Buffer-local keymaps (set to false to disable all)
+---@field approve_body? string Review body sent with `:SilverLiningSubmit APPROVE` (e.g. an LGTM image). Markdown/HTML allowed.
 local defaults = {
 	repo = nil,
+	approve_body = nil,
 	keymaps = {
 		accept = "<leader>sa",
 		dismiss = "<leader>sx",
